@@ -1,0 +1,6 @@
+psycopg2-binary
+bcrypt
+redis
+boto3
+Pillow
+pika

@@ -1,0 +1,53 @@
+# Optional HTTP-client worksheet; no extension is required by the course.
+# Replace IDs/token locally from real responses; do not commit filled-in credentials.
+# Canonical API: contracts/openapi.json and contracts/README.md.
+@baseUrl = http://localhost:8080
+@aliceId = REPLACE_WITH_CREATED_ALICE_UUID
+@bobId = REPLACE_WITH_CREATED_BOB_UUID
+@chatId = REPLACE_WITH_CREATED_CHAT_UUID
+@sessionToken = REPLACE_LOCALLY_DO_NOT_COMMIT
+
+### Liveness
+GET {{baseUrl}}/health/live
+
+### Register Alice (repeat with username bob/display_name Боб)
+POST {{baseUrl}}/api/v1/users
+Content-Type: application/json
+
+{
+  "username": "alice",
+  "display_name": "Алиса",
+  "password": "Example-only-not-a-real-secret-123"
+}
+
+### Create session: generate the Base64 value locally, do not commit credentials
+# Base64 of UTF-8 username:password; only this endpoint accepts Basic.
+POST {{baseUrl}}/api/v1/auth/sessions
+Authorization: Basic REPLACE_WITH_LOCAL_BASE64_CREDENTIAL
+
+
+### Create chat; both UUIDs must be real registered users
+POST {{baseUrl}}/api/v1/chats
+Authorization: Bearer {{sessionToken}}
+Content-Type: application/json
+
+{"title":"Проект по ВНП","member_ids":["{{aliceId}}","{{bobId}}"]}
+
+### Send message
+POST {{baseUrl}}/api/v1/chats/{{chatId}}/messages
+Authorization: Bearer {{sessionToken}}
+Idempotency-Key: example-message-001
+Content-Type: application/json
+
+{"text":"Привет, Боб!"}
+
+### Read first page
+GET {{baseUrl}}/api/v1/chats/{{chatId}}/messages?limit=50
+Authorization: Bearer {{sessionToken}}
+
+### Binary upload; HTTP file-client syntax for reading local fixture
+POST {{baseUrl}}/api/v1/chats/{{chatId}}/attachments?filename=sample.png
+Authorization: Bearer {{sessionToken}}
+Content-Type: image/png
+
+< ../tests/fixtures/sample.png

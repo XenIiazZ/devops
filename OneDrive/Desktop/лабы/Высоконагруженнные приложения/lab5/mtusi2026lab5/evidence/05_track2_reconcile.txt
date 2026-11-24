@@ -1,0 +1,15 @@
+=== TRACK 2: RECONCILER (DRY-RUN) ===
+Files in DB: 2
+Files in S3: 3
+[ORPHAN] orphan-test-file (age: 0:01:05.037689)
+
+DRY-RUN. To actually delete, run with --fix
+
+=== TRACK 2: RECONCILER (FIX) ===
+Files in DB: 2
+Files in S3: 3
+[ORPHAN] orphan-test-file (age: 0:01:17.607966)
+  -> Deleted from S3
+
+=== CHECK AFTER DELETION (expected 403/404) ===
+HTTP/1.1 403 Forbidden

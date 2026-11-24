@@ -1,0 +1,505 @@
+#!/usr/bin/env python3
+"""Durable, reconnecting attachment worker for the Lab 5 pipeline."""
+import hashlib
+import io
+import json
+import os
+import sys
+import time
+import traceback
+
+import boto3
+import pika
+import psycopg2
+import psycopg2.pool
+from botocore.config import Config
+from botocore.exceptions import ClientError
+from PIL import Image, ImageOps
+
+DB_POOL = psycopg2.pool.ThreadedConnectionPool(
+    1,
+    int(os.environ.get("DB_POOL_MAX", "10")),
+    host=os.environ.get("DB_HOST", "db"),
+    user=os.environ.get("DB_USER", "postgres"),
+    password=os.environ.get("DB_PASSWORD", "secret"),
+    dbname=os.environ.get("DB_NAME", "messenger"),
+)
+
+S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "http://rustfs:9000")
+BUCKET = os.environ.get("S3_BUCKET", "attachments")
+s3 = boto3.client(
+    "s3",
+    endpoint_url=S3_ENDPOINT,
+    aws_access_key_id=os.environ.get("S3_ACCESS_KEY", "rustfsadmin"),
+    aws_secret_access_key=os.environ.get("S3_SECRET_KEY", "rustfssecret"),
+    config=Config(signature_version="s3v4"),
+    region_name="us-east-1",
+)
+
+RABBIT_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
+RABBIT_USER = os.environ.get("RABBITMQ_USER", "guest")
+RABBIT_PASSWORD = os.environ.get("RABBITMQ_PASSWORD", "guest")
+QUEUE = "attachment_jobs"
+RETRY_QUEUE = "attachment_jobs_retry"
+DLQ = "attachment_jobs_dlq"
+MAX_RETRIES = max(1, int(os.environ.get("MAX_RETRIES", "5")))
+RETRY_BASE_SECONDS = max(1, int(os.environ.get("RETRY_BASE_SECONDS", "2")))
+RETRY_MAX_SECONDS = max(RETRY_BASE_SECONDS, int(os.environ.get("RETRY_MAX_SECONDS", "60")))
+
+
+def process_attachment(attachment_id: str, pipeline_version: int = 1) -> bool:
+    """Create deterministic S3 objects and commit variant/status before ACK."""
+    conn = DB_POOL.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT s3_key, staging_key, content_type, size_bytes, sha256
+                FROM attachments WHERE id = %s
+                """,
+                (attachment_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                print(f"Attachment {attachment_id} not found", file=sys.stderr)
+                return False
+
+            s3_key, staging_key, content_type, _size_bytes, _orig_sha = row
+            cur.execute(
+                """
+                SELECT 1 FROM variants
+                WHERE attachment_id = %s
+                  AND pipeline_version = %s
+                  AND name = 'thumbnail'
+                """,
+                (attachment_id, pipeline_version),
+            )
+            if cur.fetchone():
+                cur.execute(
+                    "UPDATE attachments SET status = 'ready', error_code = NULL, updated_at = NOW() WHERE id = %s",
+                    (attachment_id,),
+                )
+                conn.commit()
+                return True
+
+            cur.execute(
+                "UPDATE attachments SET status = 'processing', updated_at = NOW() WHERE id = %s AND status <> 'ready'",
+                (attachment_id,),
+            )
+
+        try:
+            response = s3.get_object(Bucket=BUCKET, Key=staging_key)
+            raw = response["Body"].read()
+        except ClientError as exc:
+            print(f"S3 staging read error for {attachment_id}: {exc}", file=sys.stderr)
+            return False
+
+        with Image.open(io.BytesIO(raw)) as source:
+            image = ImageOps.exif_transpose(source)
+            image.thumbnail((256, 256), Image.Resampling.LANCZOS)
+            if image.mode in ("RGBA", "LA", "P"):
+                rgba = image.convert("RGBA")
+                background = Image.new("RGB", rgba.size, (255, 255, 255))
+                background.paste(rgba, mask=rgba.getchannel("A"))
+                image = background
+            else:
+                image = image.convert("RGB")
+
+            thumb_buffer = io.BytesIO()
+            image.save(thumb_buffer, format="JPEG", quality=85, optimize=True)
+            thumb_data = thumb_buffer.getvalue()
+            thumb_width, thumb_height = image.size
+
+        thumb_key = f"{attachment_id}/thumbnail.jpg"
+        # Deterministic keys make a redelivered job safe after an uncertain ACK.
+        try:
+            s3.copy_object(
+                Bucket=BUCKET,
+                CopySource={"Bucket": BUCKET, "Key": staging_key},
+                Key=s3_key,
+            )
+        except ClientError:
+            s3.put_object(Bucket=BUCKET, Key=s3_key, Body=raw, ContentType=content_type)
+
+        s3.put_object(
+            Bucket=BUCKET,
+            Key=thumb_key,
+            Body=thumb_data,
+            ContentType="image/jpeg",
+            Metadata={"pipeline-version": str(pipeline_version)},
+        )
+
+        thumb_sha = hashlib.sha256(thumb_data).hexdigest()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO variants
+                    (attachment_id, pipeline_version, name, s3_key, content_type,
+                     size_bytes, width, height, sha256)
+                VALUES (%s, %s, 'thumbnail', %s, 'image/jpeg', %s, %s, %s, %s)
+                ON CONFLICT (attachment_id, pipeline_version, name) DO NOTHING
+                """,
+                (attachment_id, pipeline_version, thumb_key, len(thumb_data), thumb_width, thumb_height, thumb_sha),
+            )
+            cur.execute(
+                "UPDATE attachments SET status = 'ready', error_code = NULL, updated_at = NOW() WHERE id = %s",
+                (attachment_id,),
+            )
+        conn.commit()
+
+        # Staging cleanup is deliberately after the durable DB commit.
+        try:
+            s3.delete_object(Bucket=BUCKET, Key=staging_key)
+        except Exception as exc:  # cleanup failure must not undo a ready attachment
+            print(f"Staging cleanup warning for {attachment_id}: {exc}", file=sys.stderr)
+        return True
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        traceback.print_exc()
+        return False
+    finally:
+        # Also clear an open read transaction on early returns (e.g. S3 failure).
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        DB_POOL.putconn(conn, close=bool(conn.closed))
+
+
+def declare_topology(channel):
+    channel.exchange_declare(exchange="dlx", exchange_type="direct", durable=True)
+    channel.queue_declare(queue=DLQ, durable=True)
+    channel.queue_bind(exchange="dlx", queue=DLQ, routing_key=QUEUE)
+    channel.queue_declare(
+        queue=QUEUE,
+        durable=True,
+        arguments={
+            "x-dead-letter-exchange": "dlx",
+            "x-dead-letter-routing-key": QUEUE,
+        },
+    )
+    # Per-message expiration supplies bounded exponential backoff. When it
+    # expires, RabbitMQ dead-letters it back to the durable work queue.
+    channel.queue_declare(
+        queue=RETRY_QUEUE,
+        durable=True,
+        arguments={
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": QUEUE,
+        },
+    )
+    # Retry publication must be confirmed before the original delivery is ACKed.
+    channel.confirm_delivery()
+
+
+def _safe_nack(channel, delivery_tag, requeue=True):
+    try:
+        if channel is not None and channel.is_open:
+            channel.basic_nack(delivery_tag=delivery_tag, requeue=requeue)
+    except Exception as exc:
+        # If the channel has died, closing the connection causes RabbitMQ to
+        # redeliver this still-unacked message when the worker reconnects.
+        print(f"Could not NACK delivery (connection likely closed): {exc}", file=sys.stderr)
+
+
+def callback(channel, method, properties, body):
+    try:
+        job = json.loads(body)
+        attachment_id = str(job["attachment_id"])
+        pipeline_version = int(job.get("pipeline_version", 1))
+        attempt = int(job.get("attempt", 1))
+        if pipeline_version < 1 or attempt < 1:
+            raise ValueError("pipeline_version and attempt must be positive integers")
+
+        print(
+            f"Processing job for attachment {attachment_id}, "
+            f"pipeline {pipeline_version}, attempt {attempt}",
+            file=sys.stderr,
+            flush=True,
+        )
+        if process_attachment(attachment_id, pipeline_version):
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+            print(f"Attachment {attachment_id} is ready", file=sys.stderr, flush=True)
+            return
+
+        if attempt < MAX_RETRIES:
+            retry_job = dict(job)
+            retry_job["attempt"] = attempt + 1
+            delay_seconds = min(RETRY_BASE_SECONDS * (2 ** (attempt - 1)), RETRY_MAX_SECONDS)
+            channel.basic_publish(
+                exchange="",
+                routing_key=RETRY_QUEUE,
+                body=json.dumps(retry_job, separators=(",", ":")),
+                properties=pika.BasicProperties(
+                    delivery_mode=2,
+                    content_type="application/json",
+                    message_id=str(job.get("job_id", attachment_id)),
+                    expiration=str(delay_seconds * 1000),
+                ),
+                mandatory=True,
+            )
+            # Only ACK the original after RabbitMQ confirms the retry copy.
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+            print(
+                f"Scheduled retry {attempt + 1}/{MAX_RETRIES} for {attachment_id} in {delay_seconds}s",
+                file=sys.stderr,
+                flush=True,
+            )
+            return
+
+        conn = DB_POOL.getconn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE attachments SET status = 'failed', error_code = 'processing_failed', updated_at = NOW() WHERE id = %s",
+                    (attachment_id,),
+                )
+            conn.commit()
+        finally:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            DB_POOL.putconn(conn, close=bool(conn.closed))
+        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        print(f"Max retries exceeded for {attachment_id}; sent to DLQ", file=sys.stderr, flush=True)
+    except Exception as exc:
+        print(f"Callback failed; delivery will be retried by broker: {exc}", file=sys.stderr)
+        traceback.print_exc()
+        _safe_nack(channel, method.delivery_tag, requeue=True)
+
+
+def main():
+    reconnect_delay = 1
+    while True:
+        connection = None
+        try:
+            credentials = pika.PlainCredentials(RABBIT_USER, RABBIT_PASSWORD)
+            params = pika.ConnectionParameters(
+                host=RABBIT_HOST,
+                credentials=credentials,
+                heartbeat=30,
+                blocked_connection_timeout=30,
+                socket_timeout=5,
+                connection_attempts=1,
+                retry_delay=1,
+            )
+            connection = pika.BlockingConnection(params)
+            channel = connection.channel()
+            declare_topology(channel)
+            channel.basic_qos(prefetch_count=1)
+            channel.basic_consume(queue=QUEUE, on_message_callback=callback)
+            reconnect_delay = 1
+            print("Worker started, waiting for jobs...", file=sys.stderr, flush=True)
+            channel.start_consuming()
+            # start_consuming normally returns only after stop_consuming/close.
+            if connection.is_open:
+                print("Consumer stopped; reconnecting", file=sys.stderr)
+        except KeyboardInterrupt:
+            print("Worker shutdown requested", file=sys.stderr, flush=True)
+            break
+        except Exception as exc:
+            print(f"RabbitMQ connection/consumer error: {exc}", file=sys.stderr, flush=True)
+            traceback.print_exc()
+        finally:
+            # A broker shutdown already closes the connection. Calling close()
+            # on that closed connection raises ConnectionWrongStateError, so
+            # guard it and never let cleanup terminate the reconnect loop.
+            if connection is not None:
+                try:
+                    if connection.is_open:
+                        connection.close()
+                except Exception as exc:
+                    print(f"Connection cleanup warning: {exc}", file=sys.stderr)
+
+        time.sleep(reconnect_delay)
+        reconnect_delay = min(reconnect_delay * 2, 30)
+
+
+if __name__ == "__main__":
+    main()
+
+
+# #!/usr/bin/env python3
+# import json, os, sys, time, traceback, uuid, hashlib
+# import pika, psycopg2, psycopg2.pool, boto3
+# from botocore.config import Config
+# from botocore.exceptions import ClientError
+# from PIL import Image, ImageOps
+# import io
+# from datetime import datetime, timezone
+
+# DB_POOL = psycopg2.pool.ThreadedConnectionPool(
+#     1, 10,
+#     host=os.environ.get("DB_HOST", "localhost"),
+#     user=os.environ.get("DB_USER", "postgres"),
+#     password=os.environ.get("DB_PASSWORD", "secret"),
+#     dbname=os.environ.get("DB_NAME", "messenger")
+# )
+
+# s3 = boto3.client(
+#     's3',
+#     endpoint_url=os.environ.get("S3_ENDPOINT", "http://rustfs:9000"),
+#     aws_access_key_id=os.environ.get("S3_ACCESS_KEY", "rustfsadmin"),
+#     aws_secret_access_key=os.environ.get("S3_SECRET_KEY", "rustfssecret"),
+#     config=Config(signature_version='s3v4'),
+#     region_name='us-east-1'
+# )
+# BUCKET = os.environ.get("S3_BUCKET", "attachments")
+# MAX_RETRIES = 5
+# RETRY_DELAY = 2  # секунды
+
+# def process_attachment(attachment_id: str, pipeline_version: int = 1):
+#     """Идемпотентная обработка. Возвращает True если успешно."""
+#     conn = DB_POOL.getconn()
+#     try:
+#         with conn.cursor() as cur:
+#             cur.execute("""
+#                 SELECT s3_key, staging_key, content_type, size_bytes, sha256
+#                 FROM attachments WHERE id = %s
+#             """, (attachment_id,))
+#             row = cur.fetchone()
+#             if not row:
+#                 print(f"Attachment {attachment_id} not found", file=sys.stderr)
+#                 return False
+#             s3_key, staging_key, content_type, size_bytes, orig_sha = row
+
+#             # 1. Проверяем, не обработан ли уже (идемпотентность)
+#             cur.execute("""
+#                 SELECT 1 FROM variants
+#                 WHERE attachment_id = %s AND pipeline_version = %s AND name = 'thumbnail'
+#             """, (attachment_id, pipeline_version))
+#             if cur.fetchone():
+#                 # Уже готово — просто обновим статус на ready (на случай если он queued)
+#                 cur.execute("UPDATE attachments SET status = 'ready', updated_at = NOW() WHERE id = %s", (attachment_id,))
+#                 conn.commit()
+#                 return True
+
+#             # 2. Скачиваем оригинал из staging
+#             try:
+#                 obj = s3.get_object(Bucket=BUCKET, Key=staging_key)
+#                 raw = obj['Body'].read()
+#             except ClientError as e:
+#                 print(f"S3 staging read error: {e}", file=sys.stderr)
+#                 return False
+
+#             # 3. Генерируем thumbnail 256x256
+#             img = Image.open(io.BytesIO(raw))
+#             img = ImageOps.exif_transpose(img)  # применяем EXIF orientation
+#             img.thumbnail((256, 256), Image.Resampling.LANCZOS)
+#             if img.mode in ('RGBA', 'LA', 'P'):
+#                 # композиция на белый фон
+#                 background = Image.new('RGB', img.size, (255, 255, 255))
+#                 if img.mode == 'RGBA':
+#                     background.paste(img, mask=img.split()[-1])
+#                 else:
+#                     background.paste(img)
+#                 img = background
+#             thumb_bytes = io.BytesIO()
+#             img.save(thumb_bytes, format='JPEG', quality=85)
+#             thumb_data = thumb_bytes.getvalue()
+#             thumb_sha = hashlib.sha256(thumb_data).hexdigest()
+
+#             # 4. Загружаем оригинал в финальный S3 (если ещё нет) и thumbnail
+#             # Оригинал: копируем из staging в s3_key
+#             try:
+#                 s3.copy_object(Bucket=BUCKET, CopySource={'Bucket': BUCKET, 'Key': staging_key}, Key=s3_key)
+#             except ClientError:
+#                 # если копирование не поддерживается, скачиваем и загружаем
+#                 s3.put_object(Bucket=BUCKET, Key=s3_key, Body=raw, ContentType=content_type)
+#             # Thumbnail
+#             thumb_key = f"{attachment_id}/thumbnail.jpg"
+#             s3.put_object(Bucket=BUCKET, Key=thumb_key, Body=thumb_data, ContentType='image/jpeg')
+
+#             # 5. Обновляем БД: записываем вариант и статус ready
+#             cur.execute("""
+#                 INSERT INTO variants (attachment_id, pipeline_version, name, s3_key, content_type, size_bytes, width, height, sha256)
+#                 VALUES (%s, %s, 'thumbnail', %s, 'image/jpeg', %s, %s, %s, %s)
+#                 ON CONFLICT (attachment_id, pipeline_version, name) DO NOTHING
+#             """, (attachment_id, pipeline_version, thumb_key, len(thumb_data), img.width, img.height, thumb_sha))
+
+#             cur.execute("UPDATE attachments SET status = 'ready', updated_at = NOW() WHERE id = %s", (attachment_id,))
+#             conn.commit()
+
+#             # 6. Удаляем staging (опционально, после безопасной фиксации)
+#             try:
+#                 s3.delete_object(Bucket=BUCKET, Key=staging_key)
+#             except Exception:
+#                 pass
+#             return True
+#     except Exception:
+#         conn.rollback()
+#         traceback.print_exc()
+#         return False
+#     finally:
+#         DB_POOL.putconn(conn)
+
+# def callback(ch, method, properties, body):
+#     try:
+#         job = json.loads(body)
+#         attachment_id = job["attachment_id"]
+#         pipeline_version = job.get("pipeline_version", 1)
+#         attempt = job.get("attempt", 1)
+
+#         print(f"Processing job for attachment {attachment_id}, attempt {attempt}")
+#         success = process_attachment(attachment_id, pipeline_version)
+
+#         if success:
+#             ch.basic_ack(delivery_tag=method.delivery_tag)
+#         else:
+#             # retry с backoff
+#             if attempt < MAX_RETRIES:
+#                 job["attempt"] = attempt + 1
+#                 ch.basic_publish(
+#                     exchange='',
+#                     routing_key='attachment_jobs',
+#                     body=json.dumps(job),
+#                     properties=pika.BasicProperties(delivery_mode=2)
+#                 )
+#                 ch.basic_ack(delivery_tag=method.delivery_tag)
+#                 time.sleep(RETRY_DELAY * (2 ** (attempt - 1)))  # экспоненциальный backoff
+#             else:
+#                 # исчерпаны попытки — в DLQ
+#                 print(f"Max retries exceeded for {attachment_id}, moving to DLQ", file=sys.stderr)
+#                 # обновляем статус на failed
+#                 conn = DB_POOL.getconn()
+#                 with conn.cursor() as cur:
+#                     cur.execute("UPDATE attachments SET status = 'failed', error_code = 'processing_failed', updated_at = NOW() WHERE id = %s", (attachment_id,))
+#                     conn.commit()
+#                 DB_POOL.putconn(conn)
+#                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)  # в DLQ
+#     except Exception as e:
+#         print(f"Callback error: {e}", file=sys.stderr)
+#         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+
+# def main():
+#     credentials = pika.PlainCredentials('guest', 'guest')
+#     params = pika.ConnectionParameters(host=os.environ.get("RABBITMQ_HOST", "rabbitmq"), credentials=credentials)
+#     connection = pika.BlockingConnection(params)
+#     channel = connection.channel()
+
+#     # DLQ
+#     channel.exchange_declare(exchange='dlx', exchange_type='direct', durable=True)
+#     channel.queue_declare(queue='attachment_jobs_dlq', durable=True)
+#     channel.queue_bind(exchange='dlx', queue='attachment_jobs_dlq', routing_key='attachment_jobs')
+
+#     channel.queue_declare(queue='attachment_jobs', durable=True, arguments={
+#         'x-dead-letter-exchange': 'dlx',
+#         'x-dead-letter-routing-key': 'attachment_jobs'
+#     })
+
+#     channel.basic_qos(prefetch_count=1)
+#     channel.basic_consume(queue='attachment_jobs', on_message_callback=callback)
+#     print("Worker started, waiting for jobs...", file=sys.stderr)
+#     try:
+#         channel.start_consuming()
+#     except KeyboardInterrupt:
+#         channel.stop_consuming()
+#     finally:
+#         connection.close()
+
+# if __name__ == "__main__":
+#     main()

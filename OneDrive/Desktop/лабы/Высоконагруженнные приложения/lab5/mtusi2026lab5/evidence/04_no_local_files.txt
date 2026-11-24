@@ -1,0 +1,8 @@
+=== ТЕСТ 4: ОТСУТСТВИЕ ЛОКАЛЬНЫХ ФАЙЛОВ НА API ===
+Смотрим содержимое папки /app внутри контейнера API-1:
+total 40
+drwxr-xr-x 1 root root  4096 Nov 10 07:13 .
+drwxr-xr-x 1 root root  4096 Nov 10 10:25 ..
+-rwxr-xr-x 1 root root 27571 Nov 10 07:06 app.py
+-rwxr-xr-x 1 root root    45 Nov 10 07:09 requirements.txt
+Проверяем, что .png файлов нет:

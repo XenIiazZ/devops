@@ -1,0 +1,14 @@
+# Topology worksheet, deliberately NOT a runnable stack (no application supplied).
+# Implement compose.yaml or stack.yaml; do not submit this empty file as deployment.
+# Service names below are logical roles, not imposed container names.
+x-lab-number: 5
+x-required-roles:
+  - api
+  - postgres
+  - load_balancer
+  - s3
+  - broker
+  - worker
+# TODO: implement real images/builds, network wiring, volumes, healthchecks,
+# credentials and bootstrap. Details: contracts/infrastructure.json and README.md.
+services: {}

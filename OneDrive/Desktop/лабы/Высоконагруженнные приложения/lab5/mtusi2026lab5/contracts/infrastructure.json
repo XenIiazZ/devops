@@ -1,0 +1,62 @@
+{
+  "lab": 5,
+  "kind": "requirements, not runnable deployment",
+  "required_for_grade_3": [
+    {
+      "role": "api",
+      "count_min": 2,
+      "student_implements": true,
+      "persistent_local_state": false
+    },
+    {
+      "role": "postgres",
+      "purpose": "users/chats/membership/messages/metadata",
+      "persistent_volume": true
+    },
+    {
+      "role": "load_balancer",
+      "public_entrypoint": true,
+      "backend_readiness": true
+    },
+    {
+      "role": "s3",
+      "choose_one": [
+        "MinIO",
+        "SeaweedFS",
+        "RustFS"
+      ],
+      "private_bucket": true,
+      "persistent_volume": true
+    },
+    {
+      "role": "broker",
+      "choose_one": [
+        "RabbitMQ",
+        "Redis Streams",
+        "Valkey Streams",
+        "NATS JetStream",
+        "documented durable equivalent"
+      ],
+      "persistent_volume": true,
+      "delivery": "at-least-once"
+    },
+    {
+      "role": "worker",
+      "separate_process": true
+    }
+  ],
+  "optional_components": [
+    {
+      "role": "redis_or_valkey",
+      "required_for_lab2_grade4": true,
+      "note": "Choose one; if only store of sessions, configure durable persistence."
+    }
+  ],
+  "rules": [
+    "Choose Compose or Swarm for lab3+; do not need both.",
+    "Never publish internal API replica ports in bypass of LB from lab3.",
+    "Versions/digests must be fixed in implementation.",
+    "Do not remove volumes in restart/failover checks.",
+    "Document service names, healthchecks, bootstrap/migrations and credentials."
+  ]
+}
