@@ -1,0 +1,6 @@
+﻿ Container mtusi2026lab5-worker-2  Stopping
+ Container mtusi2026lab5-worker-3  Stopping
+ Container mtusi2026lab5-worker-1  Stopping
+ Container mtusi2026lab5-worker-3  Stopped
+ Container mtusi2026lab5-worker-2  Stopped
+ Container mtusi2026lab5-worker-1  Stopped

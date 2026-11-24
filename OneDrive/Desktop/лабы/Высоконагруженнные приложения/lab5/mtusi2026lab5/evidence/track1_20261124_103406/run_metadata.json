@@ -1,0 +1,28 @@
+﻿{
+  "started_utc": "2026-11-24T10:34:06.1679975+00:00",
+  "project_root": "C:\\Users\\kzaha\\OneDrive\\Desktop\\лабы\\Высоконагруженнные приложения\\lab5\\mtusi2026lab5",
+  "base_url": "http://localhost:8080",
+  "chat_id": "2a4d7d7f-2488-4575-9602-1b4f026cd634",
+  "original_worker_count": 1,
+  "worker_profiles": [
+    1,
+    2,
+    3
+  ],
+  "samples_per_size": 5,
+  "image_sizes_px": [
+    512,
+    1400,
+    2200
+  ],
+  "detected_prefetch_count": "unknown",
+  "prefetch_changed": false,
+  "application_files_modified": false,
+  "notes": [
+    "Prefetch is not changed by this script.",
+    "Concurrency is varied by scaling the existing Compose worker service.",
+    "Queue lag is calculated from API created_at to the first worker Processing log line.",
+    "RSS is read from VmRSS in /proc/1/status inside each worker container.",
+    "A 429/503 during the stopped-worker probe is evidence of admission rejection; all-202 means no bound was demonstrated at the tested burst size."
+  ]
+}

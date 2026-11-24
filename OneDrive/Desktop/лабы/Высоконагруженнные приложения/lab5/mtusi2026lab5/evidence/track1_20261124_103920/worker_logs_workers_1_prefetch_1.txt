@@ -1,0 +1,21 @@
+﻿worker-1  | 2026-11-24T10:39:53.150166391Z /app/worker.py:290: DeprecationWarning: BlockingConnection is deprecated and will be removed in Pika 2.0. Use Connection instead, which runs its own IOLoop on a background thread and provides a thread-safe blocking API that does not stall heartbeats on slow message processing. See https://pika.github.io/pika/latest/modules/adapters/thread_safe/
+worker-1  | 2026-11-24T10:39:53.150245218Z   connection = pika.BlockingConnection(params)
+worker-1  | 2026-11-24T10:39:53.221581629Z Worker started, waiting for jobs...
+worker-1  | 2026-11-24T10:39:59.926814620Z Processing job for attachment 158a51ec-fb5b-4526-a02f-55b5d9238f29, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:40:00.510431542Z Attachment 158a51ec-fb5b-4526-a02f-55b5d9238f29 is ready
+worker-1  | 2026-11-24T10:40:01.943189394Z Processing job for attachment 56ac113e-9862-4de2-a57a-9d351796de16, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:40:02.148798042Z Attachment 56ac113e-9862-4de2-a57a-9d351796de16 is ready
+worker-1  | 2026-11-24T10:40:04.989115143Z Processing job for attachment b08a2566-8ac4-4b39-8434-92ab7d406fc7, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:40:05.172348774Z Attachment b08a2566-8ac4-4b39-8434-92ab7d406fc7 is ready
+worker-1  | 2026-11-24T10:40:08.016487236Z Processing job for attachment fd81910b-8331-478b-8870-1aca8ebfe7cd, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:40:08.294379054Z Attachment fd81910b-8331-478b-8870-1aca8ebfe7cd is ready
+worker-1  | 2026-11-24T10:40:11.035319438Z Processing job for attachment a70f0444-a627-4094-9730-1b14f5a4af2e, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:40:11.343392386Z Attachment a70f0444-a627-4094-9730-1b14f5a4af2e is ready
+worker-1  | 2026-11-24T10:40:14.072423906Z Processing job for attachment ac38a2ac-5c61-42e0-ba9d-6a19a1e75b06, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:40:14.364934398Z Attachment ac38a2ac-5c61-42e0-ba9d-6a19a1e75b06 is ready
+worker-1  | 2026-11-24T10:40:17.090375055Z Processing job for attachment d7278420-6ca7-4ecf-93dd-1bd325b3e0b9, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:40:17.368857517Z Attachment d7278420-6ca7-4ecf-93dd-1bd325b3e0b9 is ready
+worker-1  | 2026-11-24T10:40:20.130211424Z Processing job for attachment 2a2e6b65-1697-425a-88e8-8e35dfff89bb, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:40:20.399553456Z Attachment 2a2e6b65-1697-425a-88e8-8e35dfff89bb is ready
+worker-1  | 2026-11-24T10:40:23.067534160Z Processing job for attachment b1fce07c-caa4-4332-8603-e2916bac50e6, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:40:23.351401962Z Attachment b1fce07c-caa4-4332-8603-e2916bac50e6 is ready

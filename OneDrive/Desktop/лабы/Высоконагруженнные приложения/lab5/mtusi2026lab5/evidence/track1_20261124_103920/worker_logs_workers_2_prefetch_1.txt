@@ -1,0 +1,24 @@
+﻿worker-1  | 2026-11-24T10:40:44.596661527Z /app/worker.py:290: DeprecationWarning: BlockingConnection is deprecated and will be removed in Pika 2.0. Use Connection instead, which runs its own IOLoop on a background thread and provides a thread-safe blocking API that does not stall heartbeats on slow message processing. See https://pika.github.io/pika/latest/modules/adapters/thread_safe/
+worker-1  | 2026-11-24T10:40:44.596737233Z   connection = pika.BlockingConnection(params)
+worker-1  | 2026-11-24T10:40:44.644087735Z Worker started, waiting for jobs...
+worker-1  | 2026-11-24T10:40:54.175447273Z Processing job for attachment b915698d-e828-491c-abd6-19557799d97c, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:40:54.621279028Z Attachment b915698d-e828-491c-abd6-19557799d97c is ready
+worker-1  | 2026-11-24T10:41:00.199858482Z Processing job for attachment f83bcef4-8c7c-4cce-8dc6-0c0b63056e80, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:41:00.437795039Z Attachment f83bcef4-8c7c-4cce-8dc6-0c0b63056e80 is ready
+worker-1  | 2026-11-24T10:41:06.265667198Z Processing job for attachment 14a15269-79e4-44bf-a394-c2a4be56f06d, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:41:06.482993169Z Attachment 14a15269-79e4-44bf-a394-c2a4be56f06d is ready
+worker-1  | 2026-11-24T10:41:11.336347705Z Processing job for attachment 60d9c31c-4930-4f1e-b685-12eef7faead8, pipeline 1, attempt 1
+worker-1  | 2026-11-24T10:41:11.799171707Z Attachment 60d9c31c-4930-4f1e-b685-12eef7faead8 is ready
+worker-2  | 2026-11-24T10:40:44.553840600Z /app/worker.py:290: DeprecationWarning: BlockingConnection is deprecated and will be removed in Pika 2.0. Use Connection instead, which runs its own IOLoop on a background thread and provides a thread-safe blocking API that does not stall heartbeats on slow message processing. See https://pika.github.io/pika/latest/modules/adapters/thread_safe/
+worker-2  | 2026-11-24T10:40:44.553921748Z   connection = pika.BlockingConnection(params)
+worker-2  | 2026-11-24T10:40:44.599401570Z Worker started, waiting for jobs...
+worker-2  | 2026-11-24T10:40:49.182750127Z Processing job for attachment d5329fad-c701-47db-ac57-8a0d22f0e478, pipeline 1, attempt 1
+worker-2  | 2026-11-24T10:40:49.942218978Z Attachment d5329fad-c701-47db-ac57-8a0d22f0e478 is ready
+worker-2  | 2026-11-24T10:40:57.177128344Z Processing job for attachment be87a4cf-0dea-4a2d-b283-a7ed67a471fd, pipeline 1, attempt 1
+worker-2  | 2026-11-24T10:40:57.398309594Z Attachment be87a4cf-0dea-4a2d-b283-a7ed67a471fd is ready
+worker-2  | 2026-11-24T10:41:03.251581105Z Processing job for attachment e69b2aa1-cd6b-403a-96c6-1e91bb941116, pipeline 1, attempt 1
+worker-2  | 2026-11-24T10:41:03.669183723Z Attachment e69b2aa1-cd6b-403a-96c6-1e91bb941116 is ready
+worker-2  | 2026-11-24T10:41:09.280599304Z Processing job for attachment c581be3b-e7ff-4be3-8110-460d25add536, pipeline 1, attempt 1
+worker-2  | 2026-11-24T10:41:09.601711242Z Attachment c581be3b-e7ff-4be3-8110-460d25add536 is ready
+worker-2  | 2026-11-24T10:41:16.371946481Z Processing job for attachment b9a746c4-8d4a-4882-a24c-5d9da8a922b6, pipeline 1, attempt 1
+worker-2  | 2026-11-24T10:41:16.913052361Z Attachment b9a746c4-8d4a-4882-a24c-5d9da8a922b6 is ready

@@ -1,0 +1,32 @@
+﻿[
+  {
+    "profile": "workers_1_prefetch_1",
+    "worker_replicas": 1,
+    "prefetch_count": "1",
+    "accepted": 9,
+    "ready": 9,
+    "failed_or_timeout": 0,
+    "logs": "C:\\Users\\kzaha\\OneDrive\\Desktop\\лабы\\Высоконагруженнные приложения\\lab5\\mtusi2026lab5\\evidence\\track1_20261124_103920\\worker_logs_workers_1_prefetch_1.txt",
+    "metric_samples": 10
+  },
+  {
+    "profile": "workers_2_prefetch_1",
+    "worker_replicas": 2,
+    "prefetch_count": "1",
+    "accepted": 9,
+    "ready": 9,
+    "failed_or_timeout": 0,
+    "logs": "C:\\Users\\kzaha\\OneDrive\\Desktop\\лабы\\Высоконагруженнные приложения\\lab5\\mtusi2026lab5\\evidence\\track1_20261124_103920\\worker_logs_workers_2_prefetch_1.txt",
+    "metric_samples": 10
+  },
+  {
+    "profile": "workers_3_prefetch_1",
+    "worker_replicas": 3,
+    "prefetch_count": "1",
+    "accepted": 9,
+    "ready": 9,
+    "failed_or_timeout": 0,
+    "logs": "C:\\Users\\kzaha\\OneDrive\\Desktop\\лабы\\Высоконагруженнные приложения\\lab5\\mtusi2026lab5\\evidence\\track1_20261124_103920\\worker_logs_workers_3_prefetch_1.txt",
+    "metric_samples": 10
+  }
+]

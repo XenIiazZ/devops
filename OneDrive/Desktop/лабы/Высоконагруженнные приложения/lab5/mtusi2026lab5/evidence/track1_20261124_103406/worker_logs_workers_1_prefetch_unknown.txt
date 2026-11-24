@@ -1,0 +1,3 @@
+﻿worker-1  | 2026-11-24T10:34:41.814058324Z /app/worker.py:290: DeprecationWarning: BlockingConnection is deprecated and will be removed in Pika 2.0. Use Connection instead, which runs its own IOLoop on a background thread and provides a thread-safe blocking API that does not stall heartbeats on slow message processing. See https://pika.github.io/pika/latest/modules/adapters/thread_safe/
+worker-1  | 2026-11-24T10:34:41.814181304Z   connection = pika.BlockingConnection(params)
+worker-1  | 2026-11-24T10:34:41.909219641Z Worker started, waiting for jobs...

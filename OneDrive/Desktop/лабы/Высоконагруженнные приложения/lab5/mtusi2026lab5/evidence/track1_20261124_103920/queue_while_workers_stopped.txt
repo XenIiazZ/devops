@@ -1,0 +1,6 @@
+﻿Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+name	messages_ready	messages_unacknowledged
+attachment_jobs	20	0
+attachment_jobs_dlq	0	0
+attachment_jobs_retry	0	0

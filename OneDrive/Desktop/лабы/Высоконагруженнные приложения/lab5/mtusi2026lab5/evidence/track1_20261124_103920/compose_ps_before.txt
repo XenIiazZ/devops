@@ -1,0 +1,8 @@
+﻿NAME                       IMAGE                             COMMAND                  SERVICE    CREATED         STATUS                     PORTS
+mtusi2026lab5-api-1        mtusi2026lab5-api                 "python app.py"          api        2 hours ago     Up 2 hours (healthy)       8080/tcp
+mtusi2026lab5-db-1         postgres:16-alpine                "docker-entrypoint.sтАж"   db         2 hours ago     Up 2 hours (healthy)       0.0.0.0:5432->5432/tcp
+mtusi2026lab5-lb-1         nginx:1.25-alpine                 "/docker-entrypoint.тАж"   lb         2 hours ago     Up 2 hours                 80/tcp, 0.0.0.0:8080->8080/tcp
+mtusi2026lab5-rabbitmq-1   rabbitmq:3.13-management-alpine   "docker-entrypoint.sтАж"   rabbitmq   2 hours ago     Up 2 hours (healthy)       4369/tcp, 5671/tcp, 0.0.0.0:5672->5672/tcp, 15671/tcp, 15691-15692/tcp, 25672/tcp, 0.0.0.0:15672->15672/tcp
+mtusi2026lab5-redis-1      valkey/valkey:7-alpine            "tini -- docker-entrтАж"   redis      2 hours ago     Up 2 hours                 6379/tcp
+mtusi2026lab5-rustfs-1     rustfs/rustfs:latest              "/entrypoint.sh rustтАж"   rustfs     2 hours ago     Up 2 hours (healthy)       0.0.0.0:9000->9000/tcp, 9001/tcp
+mtusi2026lab5-worker-1     mtusi2026lab5-worker              "python worker.py"       worker     3 minutes ago   Up 3 minutes (unhealthy)   8080/tcp

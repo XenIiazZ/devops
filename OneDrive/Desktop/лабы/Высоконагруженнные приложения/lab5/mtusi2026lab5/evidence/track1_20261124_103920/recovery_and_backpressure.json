@@ -1,0 +1,13 @@
+﻿{
+  "worker_replicas_during_probe": 0,
+  "probe_requests": 20,
+  "accepted_http_202": 20,
+  "rejected_http_429_or_503": 0,
+  "queue_ready_while_workers_stopped": 20,
+  "queue_unacked_while_workers_stopped": 0,
+  "admission_backpressure_result": "not_demonstrated_all_probe_uploads_accepted",
+  "recovered_to_ready": 20,
+  "failed_or_timeout": 0,
+  "recovery_completed": true,
+  "interpretation": "All probe uploads were accepted. This does not demonstrate a bounded admission limit; it only demonstrates queued-work recovery."
+}
